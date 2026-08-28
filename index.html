@@ -148,6 +148,13 @@
     color: var(--text-dim);
     margin-top: 3px;
   }
+  .event-row .c-title .notes {
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-top: 4px;
+    white-space: pre-line;
+    line-height: 1.5;
+  }
 
   .event-row .c-status { width: 190px; text-align: right; }
   .badge {
@@ -583,11 +590,14 @@
       if (ev.who) { metaBits.push(escapeHtml(ev.who)); }
       if (ev.location) { metaBits.push(escapeHtml(ev.location)); }
       var metaHtml = metaBits.length ? metaBits.join(' · ') : '';
+      var notesText = notesToPlainText(ev.notes);
+      var notesHtml = notesText ? escapeHtml(notesText).replace(/\n/g, '<br>') : '';
 
       html += '<div class="' + rowClass + '">' +
         '<div class="c-time">' + timeHtml + '</div>' +
         '<div class="c-title"><div class="name">' + title + '</div>' +
         (metaHtml ? '<div class="meta">' + metaHtml + '</div>' : '') +
+        (notesHtml ? '<div class="notes">' + notesHtml + '</div>' : '') +
         '</div>' +
         '<div class="c-status"><span class="badge">' + badgeFor(status, ev, now) + '</span></div>' +
         '</div>';
@@ -601,6 +611,21 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function notesToPlainText(html) {
+    if (!html) { return ''; }
+    var text = String(html);
+    text = text.replace(/<br\s*\/?>/gi, '\n');
+    text = text.replace(/<\/(p|div|li)>/gi, '\n');
+    text = text.replace(/<[^>]+>/g, '');
+    text = text.replace(/&nbsp;/gi, ' ');
+    text = text.replace(/&amp;/gi, '&');
+    text = text.replace(/&lt;/gi, '<');
+    text = text.replace(/&gt;/gi, '>');
+    text = text.replace(/\n{3,}/g, '\n\n');
+    text = text.replace(/^\s+|\s+$/g, '');
+    return text;
   }
 
   function tick() {
