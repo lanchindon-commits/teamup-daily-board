@@ -149,18 +149,20 @@
     margin-top: 3px;
   }
   .event-row .c-title .notes {
-    font-size: 13px;
-    color: var(--text-faint);
-    margin-top: 4px;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--amber);
+    margin-top: 6px;
     white-space: pre-line;
     line-height: 1.5;
   }
 
   .event-row .c-status { width: 190px; text-align: right; }
   .loc-tag {
-    font-size: 13px;
-    color: var(--text-dim);
-    margin-top: 6px;
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 8px;
   }
   .badge {
     display: inline-block;
@@ -593,7 +595,6 @@
       var title = ev.title ? escapeHtml(ev.title) : '（未命名事件）';
       var metaBits = [];
       if (ev.who) { metaBits.push(escapeHtml(ev.who)); }
-      if (ev.location) { metaBits.push(escapeHtml(ev.location)); }
       var metaHtml = metaBits.length ? metaBits.join(' · ') : '';
       var notesText = notesToPlainText(ev.notes);
       var notesHtml = notesText ? escapeHtml(notesText).replace(/\n/g, '<br>') : '';
