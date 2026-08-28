@@ -157,6 +157,11 @@
   }
 
   .event-row .c-status { width: 190px; text-align: right; }
+  .loc-tag {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
   .badge {
     display: inline-block;
     font-family: var(--mono);
@@ -599,7 +604,10 @@
         (metaHtml ? '<div class="meta">' + metaHtml + '</div>' : '') +
         (notesHtml ? '<div class="notes">' + notesHtml + '</div>' : '') +
         '</div>' +
-        '<div class="c-status"><span class="badge">' + badgeFor(status, ev, now) + '</span></div>' +
+        '<div class="c-status">' +
+        '<span class="badge">' + badgeFor(status, ev, now) + '</span>' +
+        (ev.location ? '<div class="loc-tag">' + escapeHtml(ev.location) + '</div>' : '') +
+        '</div>' +
         '</div>';
     }
     els.rowList.innerHTML = html;
