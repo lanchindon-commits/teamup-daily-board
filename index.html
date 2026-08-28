@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>忍店行事曆看板</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* ---------- 這台平板是初代 iPad Air / iOS 12.5.7，Safari 版本很舊 ----------
+     寫法上刻意避開新語法：不用 flex 的 gap、不用 ?. / ?? 等新 JS 語法、
+     不用 backdrop-filter、不用 CSS 巢狀，全部用最基本、相容度最高的寫法。 */
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+
+  :root {
+    --bg: #12151b;
+    --bg-2: #0c0e12;
+    --surface: #1b2028;
+    --surface-2: #232a34;
+    --line: #2a3140;
+    --text: #eef1f6;
+    --text-dim: #8891a1;
+    --text-faint: #545c6b;
+    --amber: #ffb454;
+    --amber-glow: rgba(255, 180, 84, 0.18);
+    --coral: #ff6b5e;
+    --coral-glow: rgba(255, 107, 94, 0.20);
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --sans: 'IBM Plex Sans', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(circle at 15% 0%, #171c24 0%, var(--bg) 45%);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* ---------- Header：站頭 / 大時鐘 ---------- */
+  .board-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 22px 34px 16px 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header-left { display: flex; align-items: baseline; }
+  .header-left .date-cn {
+    font-size: 20px;
+    color: var(--text-dim);
+    margin-right: 18px;
+    letter-spacing: 0.02em;
+  }
+  .header-left .title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    text-transform: uppercase;
+  }
+  .header-right { display: flex; align-items: baseline; }
+  .clock {
+    font-family: var(--mono);
+    font-size: 56px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .clock .sec {
+    font-size: 24px;
+    color: var(--text-faint);
+    margin-left: 6px;
+  }
+  .gear-btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
+    font-size: 18px;
+    margin-left: 20px;
+    cursor: pointer;
+  }
+  .gear-btn:active { background: var(--surface-2); }
+
+  /* ---------- Board body ---------- */
+  .board-wrap { padding: 18px 34px 0 34px; height: calc(100vh - 106px); overflow: hidden; }
+
+  .col-labels {
+    display: flex;
+    color: var(--text-faint);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+  }
+  .col-labels .c-time { width: 140px; }
+  .col-labels .c-title { flex: 1; }
+  .col-labels .c-status { width: 190px; text-align: right; }
+
+  .row-list { overflow-y: auto; height: 100%; padding-bottom: 40px; }
+
+  .event-row {
+    display: flex;
+    align-items: center;
+    padding: 16px 10px;
+    border-bottom: 1px solid var(--line);
+    transition: background-color 0.6s ease, box-shadow 0.6s ease;
+    border-radius: 8px;
+  }
+
+  .event-row .c-time {
+    width: 140px;
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+  .event-row .c-time .end {
+    display: block;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+
+  .event-row .c-title { flex: 1; padding-right: 16px; }
+  .event-row .c-title .name {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .event-row .c-title .meta {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .event-row .c-status { width: 190px; text-align: right; }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+  }
+
+  /* 狀態：即將開始（前30分鐘）*/
+  .event-row.soon {
+    background-color: var(--amber-glow);
+    box-shadow: inset 3px 0 0 var(--amber);
+    -webkit-animation: pulse-amber 2.4s ease-in-out infinite;
+    animation: pulse-amber 2.4s ease-in-out infinite;
+  }
+  .event-row.soon .badge { color: var(--amber); border-color: var(--amber); }
+
+  /* 狀態：進行中 */
+  .event-row.now {
+    background-color: var(--coral-glow);
+    box-shadow: inset 3px 0 0 var(--coral);
+    -webkit-animation: pulse-coral 1.6s ease-in-out infinite;
+    animation: pulse-coral 1.6s ease-in-out infinite;
+  }
+  .event-row.now .badge { color: var(--coral); border-color: var(--coral); background: rgba(255,107,94,0.12); }
+
+  /* 狀態：已結束 */
+  .event-row.done { opacity: 0.35; }
+  .event-row.done .c-title .name { text-decoration: line-through; text-decoration-color: var(--text-faint); }
+
+  @-webkit-keyframes pulse-amber {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--amber); }
+    50% { box-shadow: inset 3px 0 0 var(--amber), 0 0 22px rgba(255,180,84,0.22); }
+  }
+  @keyframes pulse-amber {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--amber); }
+    50% { box-shadow: inset 3px 0 0 var(--amber), 0 0 22px rgba(255,180,84,0.22); }
+  }
+  @-webkit-keyframes pulse-coral {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--coral); }
+    50% { box-shadow: inset 3px 0 0 var(--coral), 0 0 26px rgba(255,107,94,0.28); }
+  }
+  @keyframes pulse-coral {
+    0%, 100% { box-shadow: inset 3px 0 0 var(--coral); }
+    50% { box-shadow: inset 3px 0 0 var(--coral), 0 0 26px rgba(255,107,94,0.28); }
+  }
+
+  .empty-state, .error-state, .setup-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 70%;
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .empty-state .big, .error-state .big, .setup-state .big {
+    font-size: 24px;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .error-state .big { color: var(--coral); }
+  .setup-state button, .error-state button {
+    margin-top: 18px;
+    background: var(--amber);
+    color: #1a1300;
+    border: none;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 16px;
+    padding: 12px 26px;
+    border-radius: 24px;
+  }
+
+  .status-bar {
+    position: fixed;
+    left: 34px;
+    bottom: 10px;
+    font-size: 12px;
+    color: var(--text-faint);
+    font-family: var(--mono);
+  }
+
+  /* ---------- 設定視窗 ---------- */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 50;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; align-items: center; justify-content: center; }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 26px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-box h2 { margin: 0 0 6px 0; font-size: 20px; color: var(--amber); }
+  .modal-box p.help { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin: 4px 0 18px 0; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  .field input {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-family: var(--mono);
+  }
+  .modal-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+  .modal-actions button {
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 11px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-cancel { background: var(--surface-2); color: var(--text-dim); margin-right: 10px; }
+  .btn-save { background: var(--amber); color: #1a1300; }
+</style>
+</head>
+<body>
+
+  <div class="board-header">
+    <div class="header-left">
+      <span class="date-cn" id="dateLabel">--</span>
+      <span class="title">忍店 · 今日行程</span>
+    </div>
+    <div class="header-right">
+      <span class="clock" id="clockLabel">--:--<span class="sec" id="clockSec">--</span></span>
+      <button class="gear-btn" id="gearBtn">⚙</button>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="col-labels">
+      <div class="c-time">時間</div>
+      <div class="c-title">事件</div>
+      <div class="c-status">狀態</div>
+    </div>
+    <div class="row-list" id="rowList">
+      <!-- 事件列表會在這裡動態產生 -->
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">尚未連線</div>
+
+  <!-- 設定視窗 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <h2>設定 Teamup 行事曆</h2>
+      <p class="help">
+        到 Teamup 網頁版 → 行事曆設定 → Apps → API Keys 建立一組金鑰；
+        行事曆代碼（Calendar Key）就是行事曆網址 teamup.com/ 後面那串英數字。
+        若只想顯示某幾個子行事曆，可在「子行事曆代碼」填入，多個用逗號分隔（留空＝全部顯示）。
+      </p>
+      <div class="field">
+        <label>Calendar Key（行事曆代碼）</label>
+        <input type="text" id="inputCalendarKey" placeholder="例如 ksxxxxxxxxxxxxxxxx" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>API Key（Teamup-Token）</label>
+        <input type="text" id="inputApiKey" placeholder="例如 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>子行事曆代碼（選填）</label>
+        <input type="text" id="inputSubcal" placeholder="例如 1234,5678" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="field">
+        <label>提前提醒分鐘數</label>
+        <input type="text" id="inputLeadMin" placeholder="30" autocapitalize="off" autocorrect="off">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btnCancel">取消</button>
+        <button class="btn-save" id="btnSave">儲存並重新整理</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     如果你想直接把金鑰寫死在檔案裡（比手動在平板上輸入更穩定，
+     不怕 Safari 清除網站資料），把值填在這裡即可；
+     留空的話會改用平板上「設定」視窗儲存的值。
+     ========================================================= */
+  var DEFAULT_CONFIG = {
+    calendarKey: '',
+    apiKey: '',
+    subcalendarIds: '',
+    leadMinutes: 30
+  };
+
+  var STORAGE_KEY = 'teamupBoardConfig_v1';
+  var REFRESH_MS = 5 * 60 * 1000;   // 每 5 分鐘重新抓一次資料
+  var TICK_MS = 15 * 1000;          // 每 15 秒重新計算狀態
+  var els = {};
+
+  function qs(id) { return document.getElementById(id); }
+
+  function loadConfig() {
+    var cfg = null;
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) { cfg = JSON.parse(raw); }
+    } catch (e) { cfg = null; }
+
+    if (!cfg) { cfg = {}; }
+    if (!cfg.calendarKey) { cfg.calendarKey = DEFAULT_CONFIG.calendarKey; }
+    if (!cfg.apiKey) { cfg.apiKey = DEFAULT_CONFIG.apiKey; }
+    if (cfg.subcalendarIds === undefined || cfg.subcalendarIds === null) { cfg.subcalendarIds = DEFAULT_CONFIG.subcalendarIds; }
+    if (!cfg.leadMinutes) { cfg.leadMinutes = DEFAULT_CONFIG.leadMinutes; }
+    return cfg;
+  }
+
+  function saveConfig(cfg) {
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch (e) {}
+  }
+
+  var CONFIG = loadConfig();
+
+  /* ---------- 小工具 ---------- */
+  function pad2(n) { n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
+
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function fmtTime(d) { return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+
+  var WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+  function updateClock() {
+    var now = new Date();
+    if (els.clockLabel) {
+      els.clockLabel.firstChild.nodeValue = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    }
+    if (els.clockSec) { els.clockSec.textContent = pad2(now.getSeconds()); }
+    if (els.dateLabel) {
+      els.dateLabel.textContent = (now.getMonth() + 1) + '月' + now.getDate() + '日 ' + WEEKDAYS[now.getDay()];
+    }
+  }
+
+  /* ---------- 抓 Teamup 事件 ---------- */
+  var eventsCache = [];
+  var lastFetchOk = false;
+
+  function buildUrl() {
+    var base = 'https://api.teamup.com/' + encodeURIComponent(CONFIG.calendarKey) + '/events';
+    var d = todayStr();
+    var url = base + '?startDate=' + d + '&endDate=' + d;
+    var subIds = (CONFIG.subcalendarIds || '').split(',');
+    for (var i = 0; i < subIds.length; i++) {
+      var id = subIds[i].replace(/^\s+|\s+$/g, '');
+      if (id) { url += '&subcalendarId[]=' + encodeURIComponent(id); }
+    }
+    return url;
+  }
+
+  function fetchEvents() {
+    if (!CONFIG.calendarKey || !CONFIG.apiKey) {
+      renderSetupNeeded();
+      return;
+    }
+    setStatusBar('連線中…');
+    fetch(buildUrl(), {
+      method: 'GET',
+      headers: { 'Teamup-Token': CONFIG.apiKey }
+    }).then(function (res) {
+      if (!res.ok) { throw new Error('HTTP ' + res.status); }
+      return res.json();
+    }).then(function (data) {
+      eventsCache = (data && data.events) ? data.events : [];
+      eventsCache.sort(function (a, b) {
+        return new Date(a.start_dt) - new Date(b.start_dt);
+      });
+      lastFetchOk = true;
+      var now = new Date();
+      setStatusBar('已同步 ' + fmtTime(now));
+      renderRows();
+    }).catch(function (err) {
+      lastFetchOk = false;
+      setStatusBar('連線失敗，15 秒後重試');
+      if (eventsCache.length === 0) { renderError(err); }
+    });
+  }
+
+  function setStatusBar(text) {
+    if (els.statusBar) { els.statusBar.textContent = text; }
+  }
+
+  /* ---------- 畫面渲染 ---------- */
+  function renderSetupNeeded() {
+    els.rowList.innerHTML =
+      '<div class="setup-state">' +
+      '<div class="big">尚未設定 Teamup 行事曆</div>' +
+      '<div>點右上角齒輪圖示輸入 Calendar Key 與 API Key</div>' +
+      '<button id="setupOpenBtn">開始設定</button>' +
+      '</div>';
+    var btn = qs('setupOpenBtn');
+    if (btn) { btn.onclick = openModal; }
+  }
+
+  function renderError(err) {
+    els.rowList.innerHTML =
+      '<div class="error-state">' +
+      '<div class="big">無法連線 Teamup</div>' +
+      '<div>請確認 Calendar Key / API Key 是否正確，或平板網路是否正常</div>' +
+      '<button id="errorRetryBtn">重試</button>' +
+      '</div>';
+    var btn = qs('errorRetryBtn');
+    if (btn) { btn.onclick = fetchEvents; }
+  }
+
+  function statusOf(ev, now, leadMs) {
+    if (ev.all_day) { return 'allday'; }
+    var start = new Date(ev.start_dt);
+    var end = new Date(ev.end_dt);
+    var toStart = start.getTime() - now.getTime();
+    if (now.getTime() >= end.getTime()) { return 'done'; }
+    if (now.getTime() >= start.getTime()) { return 'now'; }
+    if (toStart <= leadMs) { return 'soon'; }
+    return 'upcoming';
+  }
+
+  function minutesLeft(ev, now) {
+    var start = new Date(ev.start_dt);
+    var diff = Math.round((start.getTime() - now.getTime()) / 60000);
+    return diff;
+  }
+
+  function badgeFor(status, ev, now) {
+    if (status === 'allday') { return '全天'; }
+    if (status === 'now') { return 'NOW · 進行中'; }
+    if (status === 'soon') {
+      var m = minutesLeft(ev, now);
+      return m <= 0 ? '即將開始' : m + ' 分鐘後';
+    }
+    if (status === 'done') { return '已結束'; }
+    var start = new Date(ev.start_dt);
+    return fmtTime(start) + ' 開始';
+  }
+
+  function renderRows() {
+    if (!eventsCache || eventsCache.length === 0) {
+      els.rowList.innerHTML =
+        '<div class="empty-state"><div class="big">今天沒有排定的行程</div><div>看板會持續自動更新</div></div>';
+      return;
+    }
+
+    var now = new Date();
+    var leadMs = (Number(CONFIG.leadMinutes) || 30) * 60000;
+    var html = '';
+
+    for (var i = 0; i < eventsCache.length; i++) {
+      var ev = eventsCache[i];
+      var status = statusOf(ev, now, leadMs);
+      var start = new Date(ev.start_dt);
+      var end = new Date(ev.end_dt);
+      var rowClass = 'event-row';
+      if (status === 'soon') { rowClass += ' soon'; }
+      if (status === 'now') { rowClass += ' now'; }
+      if (status === 'done') { rowClass += ' done'; }
+
+      var timeHtml = ev.all_day
+        ? '全天'
+        : fmtTime(start) + '<span class="end">→ ' + fmtTime(end) + '</span>';
+
+      var title = ev.title ? escapeHtml(ev.title) : '（未命名事件）';
+      var metaBits = [];
+      if (ev.who) { metaBits.push(escapeHtml(ev.who)); }
+      if (ev.location) { metaBits.push(escapeHtml(ev.location)); }
+      var metaHtml = metaBits.length ? metaBits.join(' · ') : '';
+
+      html += '<div class="' + rowClass + '">' +
+        '<div class="c-time">' + timeHtml + '</div>' +
+        '<div class="c-title"><div class="name">' + title + '</div>' +
+        (metaHtml ? '<div class="meta">' + metaHtml + '</div>' : '') +
+        '</div>' +
+        '<div class="c-status"><span class="badge">' + badgeFor(status, ev, now) + '</span></div>' +
+        '</div>';
+    }
+    els.rowList.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function tick() {
+    updateClock();
+    if (eventsCache.length > 0) { renderRows(); }
+  }
+
+  /* ---------- 設定視窗 ---------- */
+  function openModal() {
+    qs('inputCalendarKey').value = CONFIG.calendarKey || '';
+    qs('inputApiKey').value = CONFIG.apiKey || '';
+    qs('inputSubcal').value = CONFIG.subcalendarIds || '';
+    qs('inputLeadMin').value = CONFIG.leadMinutes || 30;
+    els.modalOverlay.className = 'modal-overlay open';
+  }
+
+  function closeModal() {
+    els.modalOverlay.className = 'modal-overlay';
+  }
+
+  function saveModal() {
+    CONFIG.calendarKey = qs('inputCalendarKey').value.replace(/^\s+|\s+$/g, '');
+    CONFIG.apiKey = qs('inputApiKey').value.replace(/^\s+|\s+$/g, '');
+    CONFIG.subcalendarIds = qs('inputSubcal').value.replace(/^\s+|\s+$/g, '');
+    CONFIG.leadMinutes = Number(qs('inputLeadMin').value) || 30;
+    saveConfig(CONFIG);
+    closeModal();
+    eventsCache = [];
+    fetchEvents();
+  }
+
+  /* ---------- 跨日：午夜自動重新整理整頁 ---------- */
+  function scheduleMidnightReload() {
+    var now = new Date();
+    var next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5, 0);
+    var ms = next.getTime() - now.getTime();
+    window.setTimeout(function () { window.location.reload(); }, ms);
+  }
+
+  /* ---------- 初始化 ---------- */
+  function init() {
+    els.clockLabel = qs('clockLabel');
+    els.clockSec = qs('clockSec');
+    els.dateLabel = qs('dateLabel');
+    els.rowList = qs('rowList');
+    els.statusBar = qs('statusBar');
+    els.modalOverlay = qs('modalOverlay');
+
+    qs('gearBtn').onclick = openModal;
+    qs('btnCancel').onclick = closeModal;
+    qs('btnSave').onclick = saveModal;
+
+    updateClock();
+    fetchEvents();
+
+    window.setInterval(tick, TICK_MS);
+    window.setInterval(fetchEvents, REFRESH_MS);
+    window.setInterval(updateClock, 1000);
+    scheduleMidnightReload();
+
+    // 每 6 小時整頁重新整理一次，避免老平板長時間開著記憶體吃緊
+    window.setTimeout(function () { window.location.reload(); }, 6 * 60 * 60 * 1000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
