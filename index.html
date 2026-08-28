@@ -493,13 +493,16 @@
 
   var WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
-  /* ---------- 技師手動標記「進行中」 ---------- */
-  var MANUAL_KEY = 'teamupBoardManualStart_v1';
+  /* ---------- 技師手動標記「進行中」（用 Supabase 同步，兩台平板互相連動） ---------- */
+  var SUPABASE_URL = 'https://hxzdmosganinyhtrswlj.supabase.co';
+  var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4emRtb3NnYW5pbnlodHJzd2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NjM4MjUsImV4cCI6MjA5ODMzOTgyNX0.78x8GhEP4vqy4rUEVBuihl2JP5u_fLLpKQTgH6wWJWg';
+  var SUPABASE_TABLE = 'board_status';
+  var MANUAL_CACHE_KEY = 'teamupBoardManualStartCache_v1';
 
-  function loadManualStarted() {
+  function loadManualCache() {
     var data = null;
     try {
-      var raw = window.localStorage.getItem(MANUAL_KEY);
+      var raw = window.localStorage.getItem(MANUAL_CACHE_KEY);
       if (raw) { data = JSON.parse(raw); }
     } catch (e) { data = null; }
     if (!data || data.date !== todayStr() || !data.ids) {
@@ -508,25 +511,78 @@
     return data;
   }
 
-  function saveManualStarted() {
-    try { window.localStorage.setItem(MANUAL_KEY, JSON.stringify(manualStarted)); } catch (e) {}
+  function saveManualCache() {
+    try { window.localStorage.setItem(MANUAL_CACHE_KEY, JSON.stringify(manualStarted)); } catch (e) {}
   }
 
-  var manualStarted = loadManualStarted();
+  /* 開機時先用本機快取畫面（避免網路一時斷線畫面空白），
+     之後每個 tick 都會向 Supabase 拿最新狀態，兩台平板互相同步。 */
+  var manualStarted = loadManualCache();
 
   function eventKey(ev) {
     if (ev.id !== undefined && ev.id !== null) { return String(ev.id); }
     return String(ev.title) + '_' + String(ev.start_dt);
   }
 
-  function toggleManualStart(key) {
-    if (manualStarted.ids[key]) {
-      delete manualStarted.ids[key];
-    } else {
-      manualStarted.ids[key] = true;
+  function supabaseHeaders(extra) {
+    var h = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json'
+    };
+    if (extra) {
+      for (var k in extra) { h[k] = extra[k]; }
     }
-    saveManualStarted();
+    return h;
+  }
+
+  /* 向 Supabase 拿今天所有「已標記進行中」的事件，回傳 Promise<boolean>
+     （true = 有成功拿到新資料並更新，false = 拿不到，畫面維持上次已知狀態）。 */
+  function fetchManualStarted() {
+    var d = todayStr();
+    var url = SUPABASE_URL + '/rest/v1/' + SUPABASE_TABLE +
+      '?event_date=eq.' + encodeURIComponent(d) + '&started=eq.true&select=event_key';
+    return fetch(url, { method: 'GET', headers: supabaseHeaders() })
+      .then(function (res) {
+        if (!res.ok) { throw new Error('HTTP ' + res.status); }
+        return res.json();
+      })
+      .then(function (rows) {
+        var ids = {};
+        for (var i = 0; i < rows.length; i++) { ids[rows[i].event_key] = true; }
+        manualStarted = { date: d, ids: ids };
+        saveManualCache();
+        return true;
+      })
+      .catch(function () { return false; });
+  }
+
+  function toggleManualStart(key) {
+    var d = todayStr();
+    var willStart = !manualStarted.ids[key];
+
+    /* 先在畫面上立刻反應（不用等網路來回），再背景同步到 Supabase */
+    if (willStart) { manualStarted.ids[key] = true; } else { delete manualStarted.ids[key]; }
+    saveManualCache();
     renderRows();
+
+    if (willStart) {
+      fetch(SUPABASE_URL + '/rest/v1/' + SUPABASE_TABLE, {
+        method: 'POST',
+        headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates' }),
+        body: JSON.stringify({
+          event_key: key,
+          event_date: d,
+          started: true,
+          updated_at: new Date().toISOString()
+        })
+      }).catch(function () {});
+    } else {
+      fetch(SUPABASE_URL + '/rest/v1/' + SUPABASE_TABLE + '?event_key=eq.' + encodeURIComponent(key), {
+        method: 'DELETE',
+        headers: supabaseHeaders()
+      }).catch(function () {});
+    }
   }
 
   function updateClock() {
@@ -760,6 +816,9 @@
   function tick() {
     updateClock();
     if (eventsCache.length > 0) { renderRows(); }
+    fetchManualStarted().then(function (changed) {
+      if (changed && eventsCache.length > 0) { renderRows(); }
+    });
   }
 
   /* ---------- 查詢子行事曆清單 ---------- */
@@ -873,6 +932,9 @@
 
     updateClock();
     fetchEvents();
+    fetchManualStarted().then(function (changed) {
+      if (changed && eventsCache.length > 0) { renderRows(); }
+    });
 
     window.setInterval(tick, TICK_MS);
     window.setInterval(fetchEvents, REFRESH_MS);
