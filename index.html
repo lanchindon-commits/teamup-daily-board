@@ -576,6 +576,7 @@
 
     var now = new Date();
     var leadMs = (Number(CONFIG.leadMinutes) || 30) * 60000;
+    var DONE_HIDE_MS = 30 * 60000;
     var html = '';
 
     for (var i = 0; i < eventsCache.length; i++) {
@@ -583,6 +584,10 @@
       var status = statusOf(ev, now, leadMs);
       var start = new Date(ev.start_dt);
       var end = new Date(ev.end_dt);
+
+      if (status === 'done' && (now.getTime() - end.getTime()) > DONE_HIDE_MS) {
+        continue;
+      }
       var rowClass = 'event-row';
       if (status === 'soon') { rowClass += ' soon'; }
       if (status === 'now') { rowClass += ' now'; }
@@ -610,6 +615,11 @@
         (ev.location ? '<div class="loc-tag">' + escapeHtml(ev.location) + '</div>' : '') +
         '</div>' +
         '</div>';
+    }
+    if (!html) {
+      els.rowList.innerHTML =
+        '<div class="empty-state"><div class="big">今天沒有排定的行程</div><div>看板會持續自動更新</div></div>';
+      return;
     }
     els.rowList.innerHTML = html;
   }
