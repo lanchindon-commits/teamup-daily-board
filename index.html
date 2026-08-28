@@ -283,6 +283,45 @@
   }
   .btn-cancel { background: var(--surface-2); color: var(--text-dim); margin-right: 10px; }
   .btn-save { background: var(--amber); color: #1a1300; }
+
+  .chip-load-btn {
+    margin-top: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .subcal-list { margin-top: 10px; }
+  .subcal-chip {
+    display: inline-block;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 6px 12px 6px 8px;
+    margin: 0 8px 8px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .subcal-chip .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    margin-right: 6px;
+    background: var(--text-faint);
+    vertical-align: middle;
+  }
+  .subcal-chip.selected {
+    border-color: var(--amber);
+    color: var(--text);
+    background: var(--amber-glow);
+  }
+  .subcal-note { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -331,8 +370,10 @@
         <input type="text" id="inputApiKey" placeholder="例如 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocapitalize="off" autocorrect="off">
       </div>
       <div class="field">
-        <label>子行事曆代碼（選填）</label>
+        <label>子行事曆代碼（選填，留空＝全部顯示）</label>
         <input type="text" id="inputSubcal" placeholder="例如 1234,5678" autocapitalize="off" autocorrect="off">
+        <button type="button" id="btnLoadSubcals" class="chip-load-btn">查詢子行事曆清單</button>
+        <div id="subcalList" class="subcal-list"></div>
       </div>
       <div class="field">
         <label>提前提醒分鐘數</label>
@@ -567,12 +608,75 @@
     if (eventsCache.length > 0) { renderRows(); }
   }
 
+  /* ---------- 查詢子行事曆清單 ---------- */
+  function currentSubcalIds() {
+    return (qs('inputSubcal').value || '').split(',')
+      .map(function (s) { return s.replace(/^\s+|\s+$/g, ''); })
+      .filter(function (s) { return s; });
+  }
+
+  function toggleSubcalId(id) {
+    var ids = currentSubcalIds();
+    var idx = ids.indexOf(String(id));
+    if (idx >= 0) { ids.splice(idx, 1); } else { ids.push(String(id)); }
+    qs('inputSubcal').value = ids.join(',');
+    renderSubcalChips(window._subcalOptions || [], ids);
+  }
+
+  function renderSubcalChips(list, selectedIds) {
+    var box = qs('subcalList');
+    if (!list || list.length === 0) {
+      box.innerHTML = '<div class="subcal-note">尚未查到子行事曆，請確認上面 Calendar Key / API Key 是否已填好</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      var sc = list[i];
+      var isSel = selectedIds.indexOf(String(sc.id)) >= 0;
+      html += '<span class="subcal-chip' + (isSel ? ' selected' : '') + '" data-id="' + sc.id + '">' +
+        '<span class="dot"></span>' + escapeHtml(sc.name) + '</span>';
+    }
+    html += '<div class="subcal-note">點一下加入／移除；沒點任何一個＝全部顯示</div>';
+    box.innerHTML = html;
+    var chips = box.querySelectorAll('.subcal-chip');
+    for (var j = 0; j < chips.length; j++) {
+      chips[j].onclick = (function (id) {
+        return function () { toggleSubcalId(id); };
+      })(chips[j].getAttribute('data-id'));
+    }
+  }
+
+  function loadSubcalendars() {
+    var calKey = qs('inputCalendarKey').value.replace(/^\s+|\s+$/g, '');
+    var apiKey = qs('inputApiKey').value.replace(/^\s+|\s+$/g, '');
+    if (!calKey || !apiKey) {
+      qs('subcalList').innerHTML = '<div class="subcal-note">請先填好上面的 Calendar Key 和 API Key 再查詢</div>';
+      return;
+    }
+    qs('subcalList').innerHTML = '<div class="subcal-note">查詢中…</div>';
+    fetch('https://api.teamup.com/' + encodeURIComponent(calKey) + '/subcalendars', {
+      method: 'GET',
+      headers: { 'Teamup-Token': apiKey }
+    }).then(function (res) {
+      if (!res.ok) { throw new Error('HTTP ' + res.status); }
+      return res.json();
+    }).then(function (data) {
+      var list = (data && data.subcalendars) ? data.subcalendars : [];
+      window._subcalOptions = list;
+      renderSubcalChips(list, currentSubcalIds());
+    }).catch(function () {
+      qs('subcalList').innerHTML = '<div class="subcal-note">查詢失敗，請確認 Calendar Key / API Key 正確</div>';
+    });
+  }
+
   /* ---------- 設定視窗 ---------- */
   function openModal() {
     qs('inputCalendarKey').value = CONFIG.calendarKey || '';
     qs('inputApiKey').value = CONFIG.apiKey || '';
     qs('inputSubcal').value = CONFIG.subcalendarIds || '';
     qs('inputLeadMin').value = CONFIG.leadMinutes || 30;
+    qs('subcalList').innerHTML = '';
+    window._subcalOptions = null;
     els.modalOverlay.className = 'modal-overlay open';
   }
 
@@ -611,6 +715,7 @@
     qs('gearBtn').onclick = openModal;
     qs('btnCancel').onclick = closeModal;
     qs('btnSave').onclick = saveModal;
+    qs('btnLoadSubcals').onclick = loadSubcalendars;
 
     updateClock();
     fetchEvents();
